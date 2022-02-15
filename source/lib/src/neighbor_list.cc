@@ -2,6 +2,11 @@
 #include "device.h"
 #include <iostream>
 #include <limits>
+
+#ifndef _OPENMP
+#include <omp.h>
+#endif
+
 // #include <iomanip> 
 
 // using namespace std;
@@ -15,6 +20,7 @@ is_loc (const std::vector<int> & idx,
 	const std::vector<int> & nat_end)
 {
   bool ret = true;
+  #pragma omp simd
   for (int dd = 0; dd < 3; ++dd) ret = ret && idx[dd] >= nat_stt[dd];
   for (int dd = 0; dd < 3; ++dd) ret = ret && idx[dd] <  nat_end[dd];
   return ret;
@@ -56,18 +62,24 @@ build_clist (std::vector<std::vector<int > > &	clist,
   // compute region info, in terms of internal coord
   int nall = coord.size() / 3;
   std::vector<int> ext_ncell(3);
-  for (int dd = 0; dd < 3; ++dd) ext_ncell[dd] = ext_end[dd] - ext_stt[dd];
-  int ncell = ext_ncell[0] * ext_ncell[1] * ext_ncell[2];
   std::vector<double > cell_size (3);
-  for (int dd = 0; dd < 3; ++dd) cell_size[dd] = 1./global_grid[dd];
   std::vector<double > nat_orig(3);
-  for (int dd = 0; dd < 3; ++dd) nat_orig[dd] = nat_stt[dd] * cell_size[dd];
   std::vector<int> idx_orig_shift(3);
-  for (int dd = 0; dd < 3; ++dd) idx_orig_shift[dd] = nat_stt[dd] - ext_stt[dd];
+
+  #pragma omp parallel for 
+  for (int dd = 0; dd < 3; ++dd){
+    ext_ncell[dd] = ext_end[dd] - ext_stt[dd];
+    cell_size[dd] = 1./global_grid[dd];
+    nat_orig[dd] = nat_stt[dd] * cell_size[dd];
+    idx_orig_shift[dd] = nat_stt[dd] - ext_stt[dd];
+  } 
+  int ncell = ext_ncell[0] * ext_ncell[1] * ext_ncell[2];
   
   // allocate the reserve the cell list
   clist.resize (ncell);
   int esti_natom_per_cell = nall / ncell + 10;
+
+  #pragma omp parallel for 
   for (unsigned ii = 0; ii < clist.size(); ++ii){
     clist[ii].clear();
     clist[ii].reserve (esti_natom_per_cell);
@@ -82,18 +94,18 @@ build_clist (std::vector<std::vector<int > > &	clist,
       idx[dd] = (inter[dd] - nat_orig[dd]) / cell_size[dd];
       if (inter[dd] - nat_orig[dd] < 0.) idx[dd] --;
       if (idx[dd] < nat_stt[dd]) {
-	if (count_warning_loc_idx_lower < MAX_WARN_IDX_OUT_OF_BOUND) {
-	  std::cerr << "# warning: loc idx out of lower bound (ignored if warned for more than " << MAX_WARN_IDX_OUT_OF_BOUND << " times) " << std::endl;
-	  count_warning_loc_idx_lower ++;
-	}	
-	idx[dd] = nat_stt[dd];
+	      if (count_warning_loc_idx_lower < MAX_WARN_IDX_OUT_OF_BOUND) {
+	        std::cerr << "# warning: loc idx out of lower bound (ignored if warned for more than " << MAX_WARN_IDX_OUT_OF_BOUND << " times) " << std::endl;
+	        count_warning_loc_idx_lower ++;
+	      }	
+	      idx[dd] = nat_stt[dd];
       }
       else if (idx[dd] >= nat_end[dd]) {
-	if (count_warning_loc_idx_upper < MAX_WARN_IDX_OUT_OF_BOUND) {
-	  std::cerr << "# warning: loc idx out of upper bound (ignored if warned for more than " << MAX_WARN_IDX_OUT_OF_BOUND << " times) " << std::endl;
-	  count_warning_loc_idx_upper ++;
-	}
-	idx[dd] = nat_end[dd] - 1;
+	      if (count_warning_loc_idx_upper < MAX_WARN_IDX_OUT_OF_BOUND) {
+	        std::cerr << "# warning: loc idx out of upper bound (ignored if warned for more than " << MAX_WARN_IDX_OUT_OF_BOUND << " times) " << std::endl;
+	        count_warning_loc_idx_upper ++;
+	      }
+	      idx[dd] = nat_end[dd] - 1;
       }
       idx[dd] += idx_orig_shift[dd];
     }

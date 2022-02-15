@@ -1,6 +1,10 @@
 #include "ewald.h"
 #include "SimulationRegion.h"
 
+#ifndef _OPENMP
+#include <omp.h>
+#endif
+
 using namespace deepmd;
 
 template<typename VALUETYPE> 
@@ -37,6 +41,9 @@ rec_err_esti(const VALUETYPE & test_q,
     BD[dd] = KK[dd]/2 + 10;
   }
   int mm[3];
+
+
+
   for (mm[0] = -BD[0]; mm[0] <= BD[0]; ++mm[0]){
     for (mm[1] = -BD[1]; mm[1] <= BD[1]; ++mm[1]){
       for (mm[2] = -BD[2]; mm[2] <= BD[2]; ++mm[2]){
@@ -44,6 +51,8 @@ rec_err_esti(const VALUETYPE & test_q,
             mm[1] >= - int(KK[1])/2 && mm[1] <= int(KK[1])/2 &&
             mm[2] >= - int(KK[2])/2 && mm[2] <= int(KK[2])/2) continue;
 	VALUETYPE rm[3] = {0,0,0};	  
+
+  #pragma omp simd
 	for (int dd = 0; dd < 3; ++dd){
 	  rm[0] += mm[dd] * rec_box[dd*3+0];
 	  rm[1] += mm[dd] * rec_box[dd*3+1];

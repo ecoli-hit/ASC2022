@@ -73,7 +73,7 @@ spline5_switch (
     FPTYPE & dd,
     const FPTYPE & xx, 
     const float & rmin, 
-    const float & rmax)
+    const float & rmax)//根据xx的大小范围更新vv dd的值
 {
   if (xx < rmin) {
     dd = 0;
@@ -82,8 +82,9 @@ spline5_switch (
   else if (xx < rmax) {
     FPTYPE uu = (xx - rmin) / (rmax - rmin) ;
     FPTYPE du = 1. / (rmax - rmin) ;
-    vv = uu*uu*uu * (-6 * uu*uu + 15 * uu - 10) + 1;
-    dd = ( 3 * uu*uu * (-6 * uu*uu + 15 * uu - 10) + uu*uu*uu * (-12 * uu + 15) ) * du;
+    FPTYPE tmp= -6 * uu*uu + 15 * uu - 10 ;
+    vv = uu*uu*uu * tmp + 1;
+    dd = ( 3 * uu*uu * tmp + uu*uu*uu * (-12 * uu + 15) ) * du;
   }
   else {
     dd = 0;

@@ -5,6 +5,10 @@
 #include "pair_tab.h"
 #include "errors.h"
 
+#ifndef _OPENMP
+#include <omp.h>
+#endif
+
 inline 
 void _pair_tabulated_inter (
     double & ener, 
@@ -69,42 +73,54 @@ void _pair_tab_jloop(
     )
 {
   const FPTYPE i_scale = scale[i_idx];
+
+  #pragma omp parallel for 
   for (int ss = 0; ss < sel.size(); ++ss){
     int j_type = ss;
     const double * cur_table_data = 
-	p_table_data + (i_type_shift + j_type) * tab_stride;
+	        p_table_data + (i_type_shift + j_type) * tab_stride;
     for (int jj = 0; jj < sel[ss]; ++jj){
       int j_idx = nlist[i_idx * nnei + jiter];
       if (j_idx < 0){
-	jiter++;
-	continue;
+	      jiter++;
+	      continue;
       }
       assert(j_type == type[j_idx]);
       double dr[3];
       for (int dd = 0; dd < 3; ++dd){
-	dr[dd] = rij[(i_idx * nnei + jiter) * 3 + dd];
+	      dr[dd] = rij[(i_idx * nnei + jiter) * 3 + dd];
       }
       double r2 = dr[0] * dr[0] + dr[1] * dr[1] + dr[2] * dr[2];
       double ri = 1./sqrt(r2);
       double ener, fscale;
       _pair_tabulated_inter(
-	  ener,
-	  fscale, 
-	  p_table_info, 
-	  cur_table_data, 
-	  dr);
+	      ener,
+	      fscale, 
+	      p_table_info, 
+	      cur_table_data, 
+	      dr);
       energy[i_idx] += 0.5 * ener;
       for (int dd = 0; dd < 3; ++dd) {
-	force[i_idx * 3 + dd] -= fscale * dr[dd] * ri * 0.5 * i_scale;
-	force[j_idx * 3 + dd] += fscale * dr[dd] * ri * 0.5 * i_scale;
+	      force[i_idx * 3 + dd] -= fscale * dr[dd] * ri * 0.5 * i_scale;
+	      force[j_idx * 3 + dd] += fscale * dr[dd] * ri * 0.5 * i_scale;
       }
+
+      #pragma omp simd 
       for (int dd0 = 0; dd0 < 3; ++dd0) {
-	for (int dd1 = 0; dd1 < 3; ++dd1) {
-	  virial[i_idx * 9 + dd0 * 3 + dd1]
-	      += 0.5 * fscale * dr[dd0] * dr[dd1] * ri * 0.5 * i_scale;
-	  virial[j_idx * 9 + dd0 * 3 + dd1]
-	      += 0.5 * fscale * dr[dd0] * dr[dd1] * ri * 0.5 * i_scale;
-	}
+	      
+	        virial[i_idx * 9 + dd0 * 3 + 0]
+	            += 0.5 * fscale * dr[dd0] * dr[0] * ri * 0.5 * i_scale;
+          virial[i_idx * 9 + dd0 * 3 + 1]
+	            += 0.5 * fscale * dr[dd0] * dr[1] * ri * 0.5 * i_scale;
+          virial[i_idx * 9 + dd0 * 3 + 2]
+	            += 0.5 * fscale * dr[dd0] * dr[2] * ri * 0.5 * i_scale;    
+	        virial[j_idx * 9 + dd0 * 3 + 0]
+	            += 0.5 * fscale * dr[dd0] * dr[0] * ri * 0.5 * i_scale;
+          virial[j_idx * 9 + dd0 * 3 + 1]
+	            += 0.5 * fscale * dr[dd0] * dr[1] * ri * 0.5 * i_scale;
+          virial[j_idx * 9 + dd0 * 3 + 2]
+	            += 0.5 * fscale * dr[dd0] * dr[2] * ri * 0.5 * i_scale;
+      	
       }
       jiter++;
     }
@@ -117,6 +133,8 @@ _cum_sum (
     const std::vector<int> & n_sel) {
   sec.resize (n_sel.size() + 1);
   sec[0] = 0;
+
+  #pragma omp parallel for ordered 
   for (int ii = 1; ii < sec.size(); ++ii){
     sec[ii] = sec[ii-1] + n_sel[ii-1];
   }
@@ -151,12 +169,11 @@ deepmd::pair_tab_cpu(
   const int tab_stride = 4 * nspline;
   
   // fill results with 0
+  #pragma omp parallel for simd 
   for (int ii = 0; ii < nloc; ++ii){
     int i_idx = ii;
     energy[i_idx] = 0;
-  }
-  for (int ii = 0; ii < nall; ++ii){
-    int i_idx = ii;
+    
     force[i_idx * 3 + 0] = 0;
     force[i_idx * 3 + 1] = 0;
     force[i_idx * 3 + 2] = 0;
@@ -164,8 +181,10 @@ deepmd::pair_tab_cpu(
       virial[i_idx * 9 + dd] = 0;
     }
   }
+
   // compute force of a frame
   int i_idx = 0;
+  #pragma omp parallel for 
   for (int tt = 0; tt < ntypes; ++tt) {
     for (int ii = 0; ii < natoms[2+tt]; ++ii){
       int i_type = type[i_idx];

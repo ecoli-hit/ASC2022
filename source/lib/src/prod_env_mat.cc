@@ -5,6 +5,10 @@
 #include "fmt_nlist.h"
 #include "env_mat.h"
 
+#ifndef _OPENMP
+#include <omp.h>
+#endif
+
 using namespace deepmd;
 
 template<typename FPTYPE>
@@ -31,15 +35,16 @@ prod_env_mat_a_cpu(
   const int nem = nnei * 4;
 
   // set & normalize coord
+  
   std::vector<FPTYPE> d_coord3(nall * 3);
-  for (int ii = 0; ii < nall; ++ii) {
-    for (int dd = 0; dd < 3; ++dd) {
-      d_coord3[ii * 3 + dd] = coord[ii * 3 + dd];
-    }
+  #pragma omp parallel for simd 
+  for (int ii = 0; ii < 3*nall; ++ii) {
+      d_coord3[ii ] = coord[ii ];
   }
 
   // set type
   std::vector<int> d_type (nall);
+  #pragma omp parallel for simd 
   for (int ii = 0; ii < nall; ++ii) {
     d_type[ii] = type[ii];
   }
@@ -48,9 +53,11 @@ prod_env_mat_a_cpu(
   std::vector<std::vector<int > > d_nlist_a(nloc);
 
   assert(nloc == inlist.inum);
+  #pragma omp parallel for simd 
   for (unsigned ii = 0; ii < nloc; ++ii) {
     d_nlist_a[ii].reserve(max_nbor_size);
   }
+  #pragma omp parallel for simd 
   for (unsigned ii = 0; ii < nloc; ++ii) {
     int i_idx = inlist.ilist[ii];
     for(unsigned jj = 0; jj < inlist.numneigh[ii]; ++jj){
@@ -76,15 +83,19 @@ prod_env_mat_a_cpu(
     assert (d_rij_a.size() == nnei * 3);
     assert (fmt_nlist_a.size() == nnei);
     // record outputs
+    #pragma omp simd 
     for (int jj = 0; jj < nem; ++jj) {
       em[ii * nem + jj] = (d_em_a[jj] - avg[d_type[ii] * nem + jj]) / std[d_type[ii] * nem + jj];
     }
+    #pragma omp simd 
     for (int jj = 0; jj < nem * 3; ++jj) {
       em_deriv[ii * nem * 3 + jj] = d_em_a_deriv[jj] / std[d_type[ii] * nem + jj / 3];
     }
+    #pragma omp simd 
     for (int jj = 0; jj < nnei * 3; ++jj) {
       rij[ii * nnei * 3 + jj] = d_rij_a[jj];
     }
+    #pragma omp simd 
     for (int jj = 0; jj < nnei; ++jj) {
       nlist[ii * nnei + jj] = fmt_nlist_a[jj];
     }
@@ -116,14 +127,14 @@ prod_env_mat_r_cpu(
 
   // set & normalize coord
   std::vector<FPTYPE> d_coord3(nall * 3);
-  for (int ii = 0; ii < nall; ++ii) {
-    for (int dd = 0; dd < 3; ++dd) {
-      d_coord3[ii * 3 + dd] = coord[ii * 3 + dd];
-    }
+  #pragma omp parallel for 
+  for (int ii = 0; ii < 3*nall; ++ii) {
+      d_coord3[ii] = coord[ii ];
   }
 
   // set type
   std::vector<int> d_type (nall);
+  #pragma omp parallel for 
   for (int ii = 0; ii < nall; ++ii) {
     d_type[ii] = type[ii];
   }
@@ -132,9 +143,11 @@ prod_env_mat_r_cpu(
   std::vector<std::vector<int > > d_nlist_a(nloc);
 
   assert(nloc == inlist.inum);
+  #pragma omp parallel for 
   for (unsigned ii = 0; ii < nloc; ++ii) {
     d_nlist_a[ii].reserve(max_nbor_size);
   }
+  #pragma omp parallel for 
   for (unsigned ii = 0; ii < nloc; ++ii) {
     int i_idx = inlist.ilist[ii];
     for(unsigned jj = 0; jj < inlist.numneigh[ii]; ++jj){
@@ -160,15 +173,19 @@ prod_env_mat_r_cpu(
     assert (d_rij_a.size() == nnei * 3);
     assert (fmt_nlist_a.size() == nnei);
     // record outputs
+    #pragma omp simd 
     for (int jj = 0; jj < nem; ++jj) {
       em[ii * nem + jj] = (d_em_a[jj] - avg[d_type[ii] * nem + jj]) / std[d_type[ii] * nem + jj];
     }
+    #pragma omp simd 
     for (int jj = 0; jj < nem * 3; ++jj) {
       em_deriv[ii * nem * 3 + jj] = d_em_a_deriv[jj] / std[d_type[ii] * nem + jj / 3];
     }
+    #pragma omp simd 
     for (int jj = 0; jj < nnei * 3; ++jj) {
       rij[ii * nnei * 3 + jj] = d_rij_a[jj];
     }
+    #pragma omp simd 
     for (int jj = 0; jj < nnei; ++jj) {
       nlist[ii * nnei + jj] = fmt_nlist_a[jj];
     }

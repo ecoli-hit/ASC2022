@@ -4,6 +4,11 @@
 #include "prod_force_grad.h"
 #include "errors.h"
 
+#ifndef _OPENMP
+#include <omp.h>
+#endif
+
+
 inline void
 make_index_range (
     int & idx_start,

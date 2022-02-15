@@ -3,9 +3,14 @@
 #include "SimulationRegion.h"
 #include <vector>
 
+#ifndef _OPENMP
+#include <omp.h>
+#endif
+
+
 using namespace deepmd;
 
-// normalize coords
+// normalize coords 
 template <typename FPTYPE>
 void
 deepmd::
@@ -14,12 +19,15 @@ normalize_coord_cpu(
     const int natom,
     const Region<FPTYPE> & region)
 {
+  #pragma omp parallel for 
   for(int ii = 0; ii < natom; ++ii){
     FPTYPE ri[3];
     convert_to_inter_cpu(ri, region, coord+3*ii);
-    for(int dd = 0; dd < 3; ++dd){
-      ri[dd] = fmod(ri[dd], 1.);
-      if (ri[dd] < 0.) ri[dd] += 1.;
+
+    #pragma omp simd 
+    for(int dd = 0; dd < 3; ++dd){//可以将循环展开
+      ri[dd] = fmod(ri[dd], 1.);//取小数部分
+      if (ri[dd] < 0.) ri[dd] += 1.;//检验负数
     }
     convert_to_phys_cpu(coord+3*ii, region, ri);
   }
@@ -44,8 +52,10 @@ copy_coord_cpu(
   const int mem_nall = mem_nall_;
   std::vector<double> coord(nloc * 3);
   std::vector<int> atype(nloc);
+
   std::copy(in_c, in_c+nloc*3, coord.begin());
   std::copy(in_t, in_t+nloc, atype.begin());
+  
   SimulationRegion<double> tmpr;
   double tmp_boxt[9];
   std::copy(region.boxt, region.boxt+9, tmp_boxt);
@@ -80,9 +90,13 @@ compute_cell_info(
 	double to_face [3];
   double tmp_boxt[9];
   std::copy(region.boxt, region.boxt+9, tmp_boxt);
+
 	tmpr.reinitBox(tmp_boxt);
 	tmpr.toFaceDistance (to_face);
+  
   double cell_size [3];
+
+  #pragma omp parellel for simd 
   for (int dd = 0; dd < 3; ++dd){
     cell_info[dd]=0; //nat_stt
     cell_info[3+dd]  = to_face[dd] / rcut; //ncell
